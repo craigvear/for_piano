@@ -27,7 +27,7 @@ class For_Piano:
 
         # build first events on blank bar
         notes, time_sig, duration, polyrhythm = self.get_event_data()
-        self.build_notes(notes, time_sig, duration, polyrhythm)
+        self.active_note_list = self.build_notes(notes, time_sig, duration, polyrhythm)
 
     def build_blank_bar(self):
         # add titles
@@ -100,6 +100,8 @@ class For_Piano:
         new_events_list.append(treble_notes)
         new_events_list.append(bass_notes)
 
+        return(new_events_list)
+
     def get_event_data(self):
         next_notes = choice(harmony.chord_list)
         next_time_sig = choice(harmony.time_sigs)
@@ -112,6 +114,10 @@ class For_Piano:
         print(next_notes, next_time_sig, next_duration, next_polyrhythm)
         return next_notes, next_time_sig, next_duration, next_polyrhythm
 
+    def remove_active_notes(self, active_notes_list):
+        for event in active_notes_list:
+            event.remove()
+
     def refresh_func(self, time):
         print(self.beat_count)
         new_colour = gray_list[self.beat_count % 4]
@@ -120,9 +126,11 @@ class For_Piano:
         self.beat_count += 1
         if self.beat_count >= 8:
             self.beat_count = 0
+            self.remove_active_notes(self.active_note_list)
             chord, time_sig, duration, polyrhythm = self.get_event_data()
             bar_length = (8 / time_sig[1]) * time_sig[0]
             print("bar length = ", time_sig, bar_length)
+            self.active_note_list = self.build_notes(chord, time_sig, duration, polyrhythm)
 
 
 if __name__ == "__main__":
