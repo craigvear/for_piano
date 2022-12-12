@@ -2,7 +2,10 @@ from neoscore.common import *
 import harmony
 from random import choice, random, randrange
 
-gray_list = ["#000000", "#808080", "#D3D3D3", "#F2F3F5"]
+gray_list = ["#000000",
+             "#808080",
+             "#D3D3D3",
+             "#F2F3F5"]
 
 class For_Piano:
     def __init__(self):
@@ -27,7 +30,7 @@ class For_Piano:
 
         # build first events on blank bar
         notes, time_sig, duration, polyrhythm = self.get_event_data()
-        self.active_note_list = self.build_notes(notes, time_sig, duration, polyrhythm)
+        self.active_note_list = self.build_new_events(notes, time_sig, duration, polyrhythm)
 
     def build_blank_bar(self):
         # add titles
@@ -57,39 +60,34 @@ class For_Piano:
         self.bpm_pulse = MusicText((ZERO, self.treble_staff.unit(-2)), self.treble_staff, "metNoteQuarterUp", brush=brush, pen=pulse_pen)
         self.bpm = Text((Mm(10), ZERO), self.bpm_pulse, "= 60", scale=2)
 
-    def build_notes(self, chord, time_sig, duration, polyrhythm):
-        # calculate new bar length from time sig & display time sig
+    def build_new_events(self, chord, time_sig, duration, polyrhythm):
+        # init events list
         new_events_list = []
 
+        # calculate new bar length from time sig & display time sig
         bar_length = (8 / time_sig[1]) * time_sig[0]
         print("bar length = ", time_sig, bar_length)
 
+        # make new time signatures
         time_sig_treble = TimeSignature(ZERO, self.treble_staff, time_sig)
         time_sig_bass = TimeSignature(ZERO, self.bass_staff, time_sig)
-
         new_events_list.append(time_sig_treble)
         new_events_list.append(time_sig_bass)
 
-        # calculate how many notes from chord
-        note_list = []
-        num_notes = randrange(2, len(chord))
-        note_list.append(chord[:num_notes][0])
-        self.build_from_end.append(chord[num_notes:])
+        # make new notes
+        clean_note_list = self.makes_new_notes(chord)
 
-        # last note in chord as a, b, c octave
-        # last_note_octave = randrange(4)
-        # if last_note_octave == 1:
-        #     note_list.append(chord[-1])
-        # elif last_note_octave == 2:
-        #     note_list.append(chord[-1][0:-1] + ",")
-        # elif last_note_octave == 3:
-        #     note_list.append(chord[-1][0:-1] + ",,")
+        # Pads 1st part of bar with rests
+        first_rest = self.first_rest(bar_length, duration)
+        new_events_list.append(first_rest)
 
-        print(note_list)
+        # sort and print onto correct staff
+        # todo random seperation of RH & LH across the bar
+        print("note list = ", clean_note_list)
         treble_note_list = []
         bass_note_list = []
 
-        for note in note_list:
+        for note in clean_note_list:
             if Pitch.from_str(note).staff_pos_from_middle_c <= 0:
                 treble_note_list.append(note)
             else:
@@ -100,9 +98,66 @@ class For_Piano:
         new_events_list.append(treble_notes)
         new_events_list.append(bass_notes)
 
-        return(new_events_list)
+        return new_events_list
+
+    def first_rest(self, bar_length, duration) -> list:
+        """Adds a rest buffer at front of bar. Will always be > 1/4 note"""
+        first_rest_list = []
+        first_rest_list.append((1, 4))
+
+        return first_rest_list
+
+    def makes_new_notes(self, chord) -> list:
+        """Calculates all note events for current bar"""
+        # calculate how many notes from chord
+        note_list = []
+        num_notes = randrange(1, len(chord))
+        print(len(chord), num_notes)
+
+        # add chosen notes to note list
+        for i in range(num_notes):
+            note_list.append(chord[i][0])
+        print(note_list)
+
+        # add the missing notes from this chord to the end list
+        end_list = []
+        if num_notes < len(chord):
+            for ie in range(len(chord) - num_notes):
+                end_list.append(chord[ie][0])
+            self.build_from_end.append(end_list)
+
+        # 3 in 5 chance last note in chord as a, b, c variation
+        if num_notes != len(chord):
+            added_note = chord[-1]
+            last_note_octave = randrange(5)
+            if last_note_octave == 0:
+                note_list.append(added_note)
+            elif last_note_octave == 1:
+                if added_note[-1] == "'" or added_note[-1] == ",":
+                    note_list.append(added_note[:-1] + ",")
+                else:
+                    note_list.append(added_note + ",")
+            elif last_note_octave == 2:
+                if added_note[-1] == "'" or added_note[-1] == ",":
+                    note_list.append(added_note[:-1] + ",,")
+                else:
+                    note_list.append(added_note + ",,")
+
+        # bubble sort for duplicate notes
+        clean_note_list = self.check_for_duplicate_notes(note_list)
+        return clean_note_list
+
+    def check_for_duplicate_notes(self, note_list) -> list:
+        """Removes any dupl;icate notes from not list.
+            Returns cleaned list"""
+        clean_note_list = [i for n, i in enumerate(note_list) if i not in note_list[:n]]
+        print("note list = ", note_list, "clean list = ", clean_note_list)
+        return clean_note_list
 
     def get_event_data(self):
+        """Randomly chooses notes, time sig, durations etc
+        from harmony list.
+            Returns choices"""
         next_notes = choice(harmony.chord_list)
         next_time_sig = choice(harmony.time_sigs)
         next_duration = choice(harmony.durations)
@@ -115,22 +170,29 @@ class For_Piano:
         return next_notes, next_time_sig, next_duration, next_polyrhythm
 
     def remove_active_notes(self, active_notes_list):
+        """Wipes clean all the old note events from previous bar"""
         for event in active_notes_list:
             event.remove()
 
-    def refresh_func(self, time):
-        print(self.beat_count)
+    def pulse_metronome_mark(self):
+        """Pulses te metronome mark depending on time sig"""
         new_colour = gray_list[self.beat_count % 4]
         self.bpm_pulse.pen.color = new_colour
-        # self.bpm_pulse.brush.color = new_colour
+        self.bpm_pulse.brush.color = Color(new_colour)
+
+    def refresh_func(self, time):
+        """Main loop, refreshing the UI"""
+        print(self.beat_count)
+        self.pulse_metronome_mark()
+
         self.beat_count += 1
-        if self.beat_count >= 8:
+        if self.beat_count >= 16:
             self.beat_count = 0
             self.remove_active_notes(self.active_note_list)
             chord, time_sig, duration, polyrhythm = self.get_event_data()
             bar_length = (8 / time_sig[1]) * time_sig[0]
             print("bar length = ", time_sig, bar_length)
-            self.active_note_list = self.build_notes(chord, time_sig, duration, polyrhythm)
+            self.active_note_list = self.build_new_events(chord, time_sig, duration, polyrhythm)
 
 
 if __name__ == "__main__":
