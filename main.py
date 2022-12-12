@@ -20,7 +20,7 @@ class For_Piano:
         self.polyrhythm_list = harmony.polythythms
 
         # set up class vars
-        self.beat_count = 0
+        self.tick_count = 0
 
         # start a list that builds up the composition from end to mid-point
         self.build_from_end = []
@@ -45,9 +45,8 @@ class For_Piano:
         self.bass_staff = Staff((Mm(75), Mm(150)), None, Mm(250), line_spacing=Mm(5), pen=fat_pen)
         bass_clef = Clef(ZERO, self.bass_staff, 'bass')
 
-        self.piano_staff = [self.treble_staff, self.bass_staff]
-
         # add bar furniture
+        self.piano_staff = [self.treble_staff, self.bass_staff]
         system_line = SystemLine(self.piano_staff)
         end_line = Barline(Mm(250), self.piano_staff)
         piano_bracket = Brace(self.piano_staff)
@@ -60,13 +59,18 @@ class For_Piano:
         self.bpm_pulse = MusicText((ZERO, self.treble_staff.unit(-2)), self.treble_staff, "metNoteQuarterUp", brush=brush, pen=pulse_pen)
         self.bpm = Text((Mm(10), ZERO), self.bpm_pulse, "= 60", scale=2)
 
+        # position a crotchet rest at start of every bar
+        # self.treble_rest = Chordrest(ZERO, self.treble_staff, None, (1, 4))
+        # self.bass_rest = Chordrest(ZERO, self.bass_staff, None, (1, 4))
+
     def build_new_events(self, chord, time_sig, duration, polyrhythm):
         # init events list
         new_events_list = []
+        remaining_total_bar_length = 0
 
-        # calculate new bar length from time sig & display time sig
-        bar_length = (8 / time_sig[1]) * time_sig[0]
-        print("bar length = ", time_sig, bar_length)
+        #######################
+        # STRUCTURE
+        #######################
 
         # make new time signatures
         time_sig_treble = TimeSignature(ZERO, self.treble_staff, time_sig)
@@ -74,38 +78,131 @@ class For_Piano:
         new_events_list.append(time_sig_treble)
         new_events_list.append(time_sig_bass)
 
-        # make new notes
+        # calculate new bar length from time sig
+        total_bar_length = (8 / time_sig[1]) * time_sig[0]
+
+        # add first rest
+        first_rest_duration = self.first_rest(time_sig)
+        print(f"first rest duration = {first_rest_duration}")
+        treble_first_rest = Chordrest(ZERO, self.treble_staff, None, (first_rest_duration, 8))
+        bass_first_rest = Chordrest(ZERO, self.bass_staff, None, (first_rest_duration, 8))
+        new_events_list.append(treble_first_rest)
+        new_events_list.append(bass_first_rest)
+
+        remaining_total_bar_length = total_bar_length - first_rest_duration
+        print("remaining duration = ", remaining_total_bar_length)
+
+        # determine note event duration
+        # todo add polyrhytmic into this equation
+        note_event_length = (8 / duration[1]) * duration[0]
+        print(f'note event length for {duration} = ', note_event_length, "quavers")
+
+        # note duration greater than bar length + 1 beat rest
+        if note_event_length > remaining_total_bar_length:
+            note_event_length = remaining_total_bar_length
+        # remaining_total_bar_length -= note_event_length
+        print(f"time sig, bar length, remaining, note event length = {time_sig, total_bar_length, remaining_total_bar_length, note_event_length}")
+
+        #######################
+        # NOTES
+        #######################
+
+        # get new notes from harmony
         clean_note_list = self.makes_new_notes(chord)
+        print("remaining duration = ", remaining_total_bar_length)
 
-        # Pads 1st part of bar with rests
-        first_rest = self.first_rest(bar_length, duration)
-        new_events_list.append(first_rest)
-
-        # sort and print onto correct staff
-        # todo random seperation of RH & LH across the bar
+        # sort into correct staff
         print("note list = ", clean_note_list)
         treble_note_list = []
         bass_note_list = []
-
         for note in clean_note_list:
             if Pitch.from_str(note).staff_pos_from_middle_c <= 0:
                 treble_note_list.append(note)
             else:
                 bass_note_list.append(note)
 
-        treble_notes = Chordrest(Mm(100), self.treble_staff, treble_note_list, duration)
-        bass_notes = Chordrest(Mm(100), self.bass_staff, bass_note_list, duration)
+        # are treble and bass notes a block?
+        if random() > 0.5:
+            print("BLOCK CHORD")
+            # treble and bass notes are a chordal block
+            # position note event for both
+            note_event_position_offset, adj_duration = self.rhythm_calculator(remaining_total_bar_length, note_event_length)
+
+            treble_event_x = Mm((first_rest_duration + note_event_position_offset) * 10)
+            bass_event_x = Mm((first_rest_duration + note_event_position_offset) * 10)
+            treble_event_duration = (adj_duration, 8)
+            bass_event_duration = (adj_duration, 8)
+
+        # or treat them as 2 separate events
+        else:
+            print("SEPARATE HANDS")
+            note_event_position_offset, adj_duration = self.rhythm_calculator(remaining_total_bar_length, note_event_length)
+            treble_event_x = Mm((first_rest_duration + note_event_position_offset) * 10)
+            treble_event_duration = (adj_duration, 8)
+
+            note_event_position_offset, adj_duration = self.rhythm_calculator(remaining_total_bar_length, note_event_length)
+            bass_event_x = Mm((first_rest_duration + note_event_position_offset) * 10)
+            bass_event_duration = (adj_duration, 8)
+
+        print("event durations", treble_event_duration, bass_event_duration)
+        # print them on the staves
+        treble_notes = Chordrest(treble_event_x,
+                                 self.treble_staff,
+                                 treble_note_list,
+                                 treble_event_duration)
+        bass_notes = Chordrest(bass_event_x,
+                               self.bass_staff,
+                               bass_note_list,
+                               bass_event_duration)
         new_events_list.append(treble_notes)
         new_events_list.append(bass_notes)
 
+        remaining_total_bar_length -= adj_duration
+        print("remaining duration = ", remaining_total_bar_length)
+
+        end_padding_rests_list = self.end_padding_rests(remaining_total_bar_length)
+        for pad in end_padding_rests_list:
+            new_events_list.append(pad)
+
         return new_events_list
 
-    def first_rest(self, bar_length, duration) -> list:
-        """Adds a rest buffer at front of bar. Will always be > 1/4 note"""
-        first_rest_list = []
-        first_rest_list.append((1, 4))
+    def end_padding_rests(self, remaining_total_bar_length):
+        remaining_total_bar_length = int(remaining_total_bar_length)
+        padding = []
+        while remaining_total_bar_length > 0:
+            print(f"padding {remaining_total_bar_length}")
+            if remaining_total_bar_length == 4:
+                rest_duration = remaining_total_bar_length
+            else:
+                rest_duration = remaining_total_bar_length % 4
+            treble_pad = Chordrest(Mm(80), self.treble_staff, [], (rest_duration, 8))
+            padding.append(treble_pad)
+            remaining_total_bar_length -= rest_duration
+        return padding
 
-        return first_rest_list
+    def first_rest(self, time_sig):
+        """if time signature is 5/8 then the first rest is a quaver.
+        else a crotchet"""
+        if time_sig[1] == 8 and time_sig[0] <= 5:
+            first_rest_duration = 1
+        else:
+            first_rest_duration = 2
+        return first_rest_duration
+
+    def rhythm_calculator(self, remaining_duration, duration_of_note):
+        """Adds a rest buffer at front of bar after the preset 1/4"""
+        print("rhythm calc   ", remaining_duration, duration_of_note)
+        compound = remaining_duration - duration_of_note
+        print("compound = ", compound)
+        if compound < 0:
+            note_event_position_offset = 0
+            duration_of_note = remaining_duration
+        elif compound == 0:
+            note_event_position_offset = 0
+        else:
+            note_event_position_offset = randrange(compound)
+        print(note_event_position_offset, duration_of_note)
+        return int(note_event_position_offset), int(duration_of_note)
 
     def makes_new_notes(self, chord) -> list:
         """Calculates all note events for current bar"""
@@ -176,18 +273,18 @@ class For_Piano:
 
     def pulse_metronome_mark(self):
         """Pulses te metronome mark depending on time sig"""
-        new_colour = gray_list[self.beat_count % 4]
+        new_colour = gray_list[self.tick_count % 4]
         self.bpm_pulse.pen.color = new_colour
         self.bpm_pulse.brush.color = Color(new_colour)
 
     def refresh_func(self, time):
         """Main loop, refreshing the UI"""
-        print(self.beat_count)
+        print(self.tick_count)
         self.pulse_metronome_mark()
 
-        self.beat_count += 1
-        if self.beat_count >= 16:
-            self.beat_count = 0
+        self.tick_count += 1
+        if self.tick_count >= 16:
+            self.tick_count = 0
             self.remove_active_notes(self.active_note_list)
             chord, time_sig, duration, polyrhythm = self.get_event_data()
             bar_length = (8 / time_sig[1]) * time_sig[0]
