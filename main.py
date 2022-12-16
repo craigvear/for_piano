@@ -1,14 +1,19 @@
 from neoscore.common import *
 import harmony
 from random import choice, random, randrange
+from time import time
 
 gray_list = ["#000000",
              "#808080",
              "#D3D3D3",
              "#F2F3F5"]
 
+
+# todo timing and reverse half
+
+
 class For_Piano:
-    def __init__(self):
+    def __init__(self, duration):
         # initiate neoscore with bespoke paper
         new_paper = Paper(Mm(400), Mm(300), Mm(1), Mm(1), Mm(1), Mm(1))
         neoscore.setup(new_paper)
@@ -21,6 +26,7 @@ class For_Piano:
 
         # set up class vars
         self.tick_count = 0
+        self.end_time = duration + time()
 
         # start a list that builds up the composition from end to mid-point
         self.build_from_end = []
@@ -55,12 +61,13 @@ class For_Piano:
 
         # position BPM/ live pulse indicator on staff
         pulse_pen = Pen(color="#ff0000")
-        # self.bpm = MetronomeMark((ZERO, self.treble_staff.unit(-2)), self.treble_staff, "metNoteQuarterUp", "= 60")
         brush = Brush()
         self.bpm_pulse = MusicText((ZERO, self.treble_staff.unit(-2)), self.treble_staff, "metNoteQuarterUp", brush=brush, pen=pulse_pen)
         self.bpm = Text((Mm(10), ZERO), self.bpm_pulse, "= 60", scale=2)
 
     def build_new_events(self, chord, time_sig, duration, polyrhythm):
+        """organises event generation and collects an event list"""
+
         # init events list
         new_events_list = []
 
@@ -84,56 +91,116 @@ class For_Piano:
         quaver_mm_unit = 25
         end_offset = 25
 
-        quaver_position_list_mm = [initial_offset]
+        self.quaver_position_list_mm = [initial_offset]
         for quaver in range(self.total_bar_length):
-            quaver_position_list_mm.append((quaver + 1) * quaver_mm_unit + initial_offset)
-        print(f"quaver offset list = {quaver_position_list_mm}")
+            self.quaver_position_list_mm.append((quaver + 1) * quaver_mm_unit + initial_offset)
+        print(f"quaver offset list = {self.quaver_position_list_mm}")
 
         # change blank bar to fit new time sig
         self.treble_staff.length = Mm(initial_offset + (self.total_bar_length * quaver_mm_unit) + end_offset)
         self.bass_staff.length = Mm(initial_offset + (self.total_bar_length * quaver_mm_unit) + end_offset)
-        self.end_line.x = Mm(quaver_position_list_mm[-1] + end_offset)
-        self.pedal.end_x = Mm(quaver_position_list_mm[-1] + end_offset)
+        self.end_line.x = Mm(self.quaver_position_list_mm[-1] + end_offset)
+        self.pedal.end_x = Mm(self.quaver_position_list_mm[-1] + end_offset)
+
+        # make quaver position list for iterating through quaver_position_list_mm
+        self.treble_next_8th_position = 0
+        self.bass_next_8th_position = 0
+        next_8th_position_list = [self.treble_next_8th_position,
+                                  self.bass_next_8th_position]
 
         #######################
         # add first rest
         #######################
-
-        first_rest_duration = self.first_rest(time_sig)
-        treble_first_rest = Chordrest(Mm(quaver_position_list_mm[0]), self.treble_staff, None, (first_rest_duration, 8))
-        bass_first_rest = Chordrest(Mm(quaver_position_list_mm[0]), self.bass_staff, None, (first_rest_duration, 8))
+        treble_first_rest = self.add_first_rest(time_sig,
+                                                self.treble_staff,
+                                                self.treble_next_8th_position)
         new_events_list.append(treble_first_rest)
-        new_events_list.append(bass_first_rest)
 
-        remaining_total_bar_length -= first_rest_duration
-        treble_next_event = first_rest_duration
-        bass_next_event = first_rest_duration
-        print("remaining duration = ", remaining_total_bar_length)
+        bass_first_rest = self.add_first_rest(time_sig,
+                                                self.bass_staff,
+                                                self.bass_next_8th_position)
+        new_events_list.append(bass_first_rest)
 
         #######################
         # get note list
         #######################
-
-        # determine note event duration
+        # determine note event duration in quavers
         # todo add polyrhytmic into this equation
         note_event_length = (8 / duration[1]) * duration[0]
+
+        # # calc polyrythm extras if applicable
+        # if polyrhythm:
+        #     poly_nums = (int(polyrhythm[0]), int(polyrhythm[-1]))
+        #     polyrhythm_extra = (8 / poly_nums[1]) * poly_nums[0]
+        #     note_event_length =
         print(f'note event length for {duration} = ', note_event_length, "quavers")
 
-        # note duration greater than bar length + 1 beat rest
-        if note_event_length > remaining_total_bar_length:
-            note_event_length = remaining_total_bar_length
-
         # get new notes from harmony
-        clean_note_list = self.makes_new_notes(chord)
+        raw_note_list = self.makes_new_notes(chord)
+        # sort into LH & RH & clean duplicates
+        treble_note_list, bass_note_list = self.clean_note_list(raw_note_list)
+        hand_list = [treble_note_list, bass_note_list]
+
+        #######################
+        # Block or separate hands
+        #######################
+        if random() > 0.5:
+            # todo check if individual hand list has anything in it
+            print("BLOCK CHORD")
+
+            # get position of block chord
+            for i, hand in enumerate(hand_list):
+                events = self.note_position(note_event_length,
+                                            next_8th_position_list[i])
+
+                # put rests and notes on master event list
+                for e in events:
+                    hand.append(e)
+
+
+
+
+        # or treat them as 2 separate events
+        else:
+            print("SEPARATE HANDS")
+
+
+
+
+
+        #
+        # bass_first_rest = Chordrest(Mm(quaver_position_list_mm[0]), self.bass_staff, None, (first_rest_duration, 8))
+        # new_events_list.append(bass_first_rest)
+        #
+        # remaining_total_bar_length -= first_rest_duration
+        # treble_next_8th_position = first_rest_duration
+        # bass_next_8th_position = first_rest_duration
+        # return first_rest_duration
+        #
+        # #######################
+        # # get note list
+        # #######################
+        #
+        # # determine note event duration
+        # # todo add polyrhytmic into this equation
+        # note_event_length = (8 / duration[1]) * duration[0]
+        # print(f'note event length for {duration} = ', note_event_length, "quavers")
+
+        # # note duration greater than bar length + 1 beat rest
+        # if note_event_length > remaining_total_bar_length:
+        #     note_event_length = remaining_total_bar_length
+
+        # # get new notes from harmony
+        # clean_note_list = self.makes_new_notes(chord)
 
         # sort into LH & RH
-        treble_note_list = []
-        bass_note_list = []
-        for note in clean_note_list:
-            if Pitch.from_str(note).staff_pos_from_middle_c <= 0:
-                treble_note_list.append(note)
-            else:
-                bass_note_list.append(note)
+        # treble_note_list = []
+        # bass_note_list = []
+        # for note in clean_note_list:
+        #     if Pitch.from_str(note).staff_pos_from_middle_c <= 0:
+        #         treble_note_list.append(note)
+        #     else:
+        #         bass_note_list.append(note)
 
         #######################
         # Put notes and padding on staffs
@@ -152,27 +219,30 @@ class For_Piano:
             rests_padding = self.padding_rests(note_event_position_offset)
             for i, pad in enumerate(rests_padding):
                 if treble_note_list:
-                    treble_pad = Chordrest(Mm(quaver_position_list_mm[treble_next_event]), self.treble_staff, [], (pad, 8))
+                    treble_pad = Chordrest(Mm(quaver_position_list_mm[treble_next_8th_position]), self.treble_staff, [], (pad, 8))
                     new_events_list.append(treble_pad)
-                    treble_next_event += pad
+                    treble_next_8th_position += pad
 
                 if bass_note_list:
-                    bass_pad = Chordrest(Mm(quaver_position_list_mm[bass_next_event]), self.bass_staff, [], (pad, 8))
+                    bass_pad = Chordrest(Mm(quaver_position_list_mm[bass_next_8th_position]), self.bass_staff, [], (pad, 8))
                     new_events_list.append(bass_pad)
-                    bass_next_event += pad
+                    bass_next_8th_position += pad
 
             # calculate params for the note/chord event
-            treble_event_x = Mm(quaver_position_list_mm[treble_next_event])
-            bass_event_x = Mm(quaver_position_list_mm[bass_next_event])
-            treble_event_duration = (adj_note_length, 8)
-            bass_event_duration = (adj_note_length, 8)
+            if treble_note_list:
+                treble_event_x = Mm(quaver_position_list_mm[treble_next_8th_position])
+                treble_event_duration = (adj_note_length, 8)
 
             # calc remaining duration for end pad
-            treble_remaining_duration = remaining_duration #- adj_note_length
-            bass_remaining_duration = remaining_duration #- adj_note_length
-            treble_next_event += adj_note_length
-            bass_next_event += adj_note_length
+                treble_remaining_duration = remaining_duration
+                treble_next_8th_position += adj_note_length
 
+            if bass_note_list:
+                bass_event_x = Mm(quaver_position_list_mm[bass_next_8th_position])
+                bass_event_duration = (adj_note_length, 8)
+
+                bass_remaining_duration = remaining_duration
+                bass_next_8th_position += adj_note_length
 
         # or treat them as 2 separate events
         else:
@@ -183,15 +253,14 @@ class For_Piano:
             # add rests before event for treble clef
             rests_padding = self.padding_rests(note_event_position_offset)
             for i, pad in enumerate(rests_padding):
-                treble_pad = Chordrest(Mm(quaver_position_list_mm[treble_next_event]), self.treble_staff, [], (pad, 8))
+                treble_pad = Chordrest(Mm(quaver_position_list_mm[treble_next_8th_position]), self.treble_staff, [], (pad, 8))
                 new_events_list.append(treble_pad)
-                treble_next_event += pad
+                treble_next_8th_position += pad
 
             # calc note coords
-            treble_event_x = Mm(quaver_position_list_mm[treble_next_event])
+            treble_event_x = Mm(quaver_position_list_mm[treble_next_8th_position])
             treble_event_duration = (adj_note_length, 8)
-            treble_remaining_duration = remaining_duration #- (treble_next_event_start_offset + adj_note_length)
-            treble_next_event += adj_note_length
+            treble_next_8th_position += adj_note_length
 
             # add rests before event for bass clef
             note_event_position_offset, adj_note_length, remaining_duration = self.note_position(remaining_total_bar_length, note_event_length)
@@ -199,31 +268,33 @@ class For_Piano:
             # add rests before event for bass clef
             rests_padding = self.padding_rests(note_event_position_offset)
             for i, pad in enumerate(rests_padding):
-                bass_pad = Chordrest(Mm(quaver_position_list_mm[bass_next_event]), self.bass_staff, [], (pad, 8))
+                bass_pad = Chordrest(Mm(quaver_position_list_mm[bass_next_8th_position]), self.bass_staff, [], (pad, 8))
                 new_events_list.append(bass_pad)
-                bass_next_event += pad
+                bass_next_8th_position += pad
 
             # calc note coords
-            bass_event_x = Mm(quaver_position_list_mm[bass_next_event])
+            bass_event_x = Mm(quaver_position_list_mm[bass_next_8th_position])
             bass_event_duration = (adj_note_length, 8)
-            bass_remaining_duration = remaining_duration #- (bass_next_event_start_offset + adj_note_length)
-            bass_next_event += adj_note_length
+            bass_next_8th_position += adj_note_length
 
-        print("event durations", treble_event_duration, bass_event_duration)
+        treble_remaining_duration = remaining_duration
+        bass_remaining_duration = remaining_duration
+
+        # print("event durations", treble_event_duration, bass_event_duration)
         # print them on the staves
-        treble_notes = Chordrest(treble_event_x,
-                                 self.treble_staff,
-                                 treble_note_list,
-                                 treble_event_duration)
+        if treble_note_list:
+            treble_notes = Chordrest(treble_event_x,
+                                     self.treble_staff,
+                                     treble_note_list,
+                                     treble_event_duration)
+            new_events_list.append(treble_notes)
 
-        bass_notes = Chordrest(bass_event_x,
-                               self.bass_staff,
-                               bass_note_list,
-                               bass_event_duration)
-
-        new_events_list.append(treble_notes)
-        new_events_list.append(bass_notes)
-
+        if bass_note_list:
+            bass_notes = Chordrest(bass_event_x,
+                                   self.bass_staff,
+                                   bass_note_list,
+                                   bass_event_duration)
+            new_events_list.append(bass_notes)
 
         #######################
         # final padding
@@ -233,17 +304,49 @@ class For_Piano:
 
         treble_end_padding_rests_list = self.padding_rests(treble_remaining_duration)
         for i, pad in enumerate(treble_end_padding_rests_list):
-            treble_first_rest = Chordrest(Mm(quaver_position_list_mm[treble_next_event]), self.treble_staff, None, (pad, 8))
+            treble_first_rest = Chordrest(Mm(quaver_position_list_mm[treble_next_8th_position]), self.treble_staff, None, (pad, 8))
             new_events_list.append(treble_first_rest)
-            treble_next_event += pad
+            treble_next_8th_position += pad
 
         bass_end_padding_rests_list = self.padding_rests(bass_remaining_duration)
         for i, pad in enumerate(bass_end_padding_rests_list):
-            bass_first_rest = Chordrest(Mm(quaver_position_list_mm[bass_next_event]), self.bass_staff, None, (pad, 8))
+            bass_first_rest = Chordrest(Mm(quaver_position_list_mm[bass_next_8th_position]), self.bass_staff, None, (pad, 8))
             new_events_list.append(bass_first_rest)
-            bass_next_event += pad
+            bass_next_8th_position += pad
 
         return new_events_list
+
+    def clean_note_list(self, raw_chord_list) -> tuple(list, list):
+        """Removes any dupl;icate notes from not list.
+            Returns cleaned list for LH & RH"""
+        treble_note_list = []
+        bass_note_list = []
+
+        clean_note_list = [i for n, i in enumerate(raw_chord_list) if i not in raw_chord_list[:n]]
+        print("note list = ", raw_chord_list, "clean list = ", clean_note_list)
+
+        for note in clean_note_list:
+            if Pitch.from_str(note).staff_pos_from_middle_c <= 0:
+                treble_note_list.append(note)
+            else:
+                bass_note_list.append(note)
+
+        return treble_note_list, bass_note_list
+
+    def add_first_rest(self, time_sig, staff, next_event_list):
+        """if time signature is 5/8 then the first rest is a quaver.
+                else a crotchet.
+                Make a Chordrest.
+                Return: Chordrest"""
+        if time_sig[1] == 8 and time_sig[0] <= 5:
+            first_rest_duration = 1
+        else:
+            first_rest_duration = 2
+        print(f"first rest duration = {first_rest_duration}")
+
+        first_rest = Chordrest(Mm(self.quaver_position_list_mm[0]), staff, None, (first_rest_duration, 8))
+        next_event_list += first_rest_duration
+        return first_rest
 
     def padding_rests(self, remaining_total_bar_length) -> list:
         remaining_total_bar_length = int(remaining_total_bar_length)
@@ -278,13 +381,17 @@ class For_Piano:
         print(f"first rest duration = {first_rest_duration}")
         return first_rest_duration
 
-    def note_position(self, remaining_duration, duration_of_note):
-        """Adds a rest buffer at front of bar after the preset 1/4"""
-        print("rhythm calc   ", remaining_duration, duration_of_note)
+    def note_position(self, duration_of_note, next_8th_position) -> list:
+        """position of note/ chord event, pads with rest at front if needed"""
 
         # position the note event somewhere in the remaining bar
+        event_list = []
+        remaining_duration = self.total_bar_length - next_8th_position
         note_position = randrange(remaining_duration)
         print(f"note position = {note_position}")
+
+        # pad with rests
+
 
         # how much of bar is left?
         remaining_duration -= note_position
@@ -297,7 +404,14 @@ class For_Piano:
             duration_of_note = remaining_duration
             remaining_duration = 0
 
-        return int(note_position), int(duration_of_note), int(remaining_duration)
+
+
+
+
+
+
+
+        return event_list
 
         #
         # compound = remaining_duration - duration_of_note
@@ -355,12 +469,12 @@ class For_Piano:
         print("CLEAN note list = ", clean_note_list)
         return clean_note_list
 
-    def check_for_duplicate_notes(self, note_list) -> list:
-        """Removes any dupl;icate notes from not list.
-            Returns cleaned list"""
-        clean_note_list = [i for n, i in enumerate(note_list) if i not in note_list[:n]]
-        print("note list = ", note_list, "clean list = ", clean_note_list)
-        return clean_note_list
+    # def check_for_duplicate_notes(self, note_list) -> list:
+    #     """Removes any dupl;icate notes from not list.
+    #         Returns cleaned list"""
+    #     clean_note_list = [i for n, i in enumerate(note_list) if i not in note_list[:n]]
+    #     print("note list = ", note_list, "clean list = ", clean_note_list)
+    #     return clean_note_list
 
     def get_event_data(self):
         """Randomly chooses notes, time sig, durations etc
@@ -388,23 +502,37 @@ class For_Piano:
         self.bpm_pulse.pen.color = new_colour
         self.bpm_pulse.brush.color = Color(new_colour)
 
+    def terminate(self):
+        neoscore.shutdown()
+
+    def reverse_build_from_list(self, time_sig, duration, polyrhythm):
+        pass
+
     def refresh_func(self, time):
         """Main loop, refreshing the UI"""
-        # print(self.tick_count)
-        self.pulse_metronome_mark()
+        while time() <= self.end_time:
 
-        self.tick_count += 1
-        if self.tick_count >= self.total_bar_length * 2:
-            self.tick_count = 0
-            self.remove_active_notes(self.active_note_list)
-            chord, time_sig, duration, polyrhythm = self.get_event_data()
-            bar_length = (8 / time_sig[1]) * time_sig[0]
-            print("bar length = ", time_sig, bar_length)
-            self.active_note_list = self.build_new_events(chord, time_sig, duration, polyrhythm)
+            # print(self.tick_count)
+            self.pulse_metronome_mark()
+
+            self.tick_count += 1
+
+            if self.tick_count >= self.total_bar_length * 2:
+                self.tick_count = 0
+                self.remove_active_notes(self.active_note_list)
+                chord, time_sig, duration, polyrhythm = self.get_event_data()
+                bar_length = (8 / time_sig[1]) * time_sig[0]
+                print("bar length = ", time_sig, bar_length)
+                if time <= self.end_time / 2:
+                    self.active_note_list = self.build_new_events(chord, time_sig, duration, polyrhythm)
+                else:
+                    self.active_note_list = self.reverse_build_from_list(time_sig, duration, polyrhythm)
+
+        self.terminate()
 
 
 if __name__ == "__main__":
-    for_piano = For_Piano()
+    for_piano = For_Piano(duration=360)
 
     # set the refresh function to the score main loop
     # change fps to allow pulse to fade
