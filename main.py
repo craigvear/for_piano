@@ -135,12 +135,12 @@ class For_Piano:
         # get new notes from harmony & sort into LH & RH & clean duplicates
         raw_note_list = self.makes_new_notes(chord)
         treble_note_list, bass_note_list = self.clean_note_list(raw_note_list)
+        print(f"notes lists = {treble_note_list, bass_note_list}")
         note_list_list = [treble_note_list, bass_note_list]
 
         # determine note event duration in quavers
         # todo add polyrhytmic into this equation
         duration_of_note = int((8 / duration[1]) * duration[0])
-        remaining_duration = (self.total_bar_length - first_rest_duration) - duration_of_note
 
         # # calc polyrythm extras if applicable
         # if polyrhythm:
@@ -156,6 +156,7 @@ class For_Piano:
         # positions of next event
         if random() > 0.5:
             print("BLOCK CHORD")
+            remaining_duration = (self.total_bar_length - first_rest_duration) - duration_of_note
 
             # position of note event (this will go into each hand loop for "separate"
             if remaining_duration > 0:
@@ -163,7 +164,7 @@ class For_Piano:
             else:
                 rnd_position = 0
             note_position = rnd_position + first_rest_duration # next_8th_position_list[i][0]
-            print(f"note_position = {note_position}")
+            print(f"note_position for BLOCK = {note_position}")
 
             # for each hand
             for i, hand_list in enumerate(note_list_list):
@@ -187,6 +188,7 @@ class For_Piano:
                                                      duration_of_note,
                                                      hand_list,
                                                      self.piano_staff_list[i],
+                                                     polyrhythm
                                                      )
 
                 # put rests and notes on master event list
@@ -219,14 +221,17 @@ class For_Piano:
 
             # for each hand
             for i, hand_list in enumerate(note_list_list):
+                remaining_duration = (self.total_bar_length - first_rest_duration) - duration_of_note
                 # position of note event
                 if remaining_duration > 0:
                     rnd_position = randrange(remaining_duration)
                 else:
                     rnd_position = 0
 
-                note_position = rnd_position + next_8th_position_list[i][0]
-                print(f"note_position = {note_position}")
+                print(f"hand list = {hand_list}")
+
+                note_position = rnd_position + first_rest_duration
+                print(f"note_position for {hand_list} = {note_position}")
 
                 # calc padding params
                 padding_rest_start_position = next_8th_position_list[i][0]
@@ -279,39 +284,13 @@ class For_Piano:
     def note_position(self, note_position,
                       duration_of_note,
                       hand_list,
-                      staff):
+                      staff,
+                      polyrhythm):
         """position of note/ chord event, pads with rest at front if needed.
         :returns list of Chordrest events (chords and rests)"""
 
         # position the note event somewhere in the remaining bar
         local_event_list = []
-        # print(f"next_8th_position = {next_8th_position}")
-        # todo - this is very wrong
-
-        # find the remaining beats after the first rest.
-        # get value from treble next 8th position
-        # temp_8th_position = self.next_8th_position.get(next_8th_position_key)
-        # # remaining_duration = (self.total_bar_length - temp_8th_position) - duration_of_note
-        # note_position = randrange(remaining_duration) + temp_8th_position
-        # print(f"random note position = {note_position} out of {remaining_duration}")
-
-        # # pad with rests
-        # rests_padding = self.padding_rests(note_position - temp_8th_position)
-        # print("rests padding = ", rests_padding)
-
-        # for i, pad in enumerate(rests_padding):
-        #     if hand_list:
-        #         print(f"next_8th_position = {self.next_8th_position[temp_8th_position]}")
-        #         rest_pad = Chordrest(Mm(self.quaver_position_list_mm[temp_8th_position]),
-        #                                staff, [],
-        #                                (pad, 8))
-        #         local_event_list.append(rest_pad)
-        #         temp_8th_position += pad
-        #         print(f"next_8th_position = {temp_8th_position}")
-
-        # adjust note length to accom rest padding
-        # if duration_of_note > duration_of_note + next_8th_position:
-        #     duration_of_note = remaining_duration - next_8th_position
 
         # calc note coords
         event_x = Mm(self.quaver_position_list_mm[note_position])
@@ -327,13 +306,13 @@ class For_Piano:
                           event_duration)
         local_event_list.append(notes)
 
-        #     # how much of bar is left?
-        #     print(f"event_duration {event_duration}")
-        #     temp_8th_position += duration_of_note
-        #     print(f"next_8th_position = {temp_8th_position}")
-        #
-        # # put temp 8th position into the dictionary
-        # self.next_8th_position[next_8th_position_key] = temp_8th_position
+        # position polyrhythm
+        if polyrhythm:
+            tuplet = Tuplet(Mm(-25),
+                            notes,
+                            )
+
+            local_event_list.append(tuplet)
 
         return local_event_list
 
