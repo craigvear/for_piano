@@ -10,8 +10,6 @@ gray_list = ["#000000",
 
 
 # todo timing and reverse half
-# todo add polyrhytmic into this equation
-
 
 class For_Piano:
     def __init__(self, duration):
@@ -253,7 +251,7 @@ class For_Piano:
                                                      duration_of_note,
                                                      hand_list,
                                                      self.piano_staff_list[i],
-                                                     )
+                                                     polyrhythm)
 
                 # put rests and notes on master event list
                 for e in neoscore_events:
@@ -308,8 +306,11 @@ class For_Piano:
 
         # position polyrhythm
         if polyrhythm:
-            tuplet = Tuplet(Mm(-25),
+            tuplet = Tuplet((Mm(-25), staff.unit(-2)),
                             notes,
+                            (Mm(75), ZERO),
+                            indicator_text=polyrhythm,
+                            bracket_dir=DirectionY.UP
                             )
 
             local_event_list.append(tuplet)
