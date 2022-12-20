@@ -1,3 +1,4 @@
+import sys
 from neoscore.common import *
 import harmony
 from random import choice, random, randrange
@@ -7,9 +8,6 @@ gray_list = ["#000000",
              "#808080",
              "#D3D3D3",
              "#F2F3F5"]
-
-
-# todo timing and reverse half
 
 class For_Piano:
     def __init__(self, duration):
@@ -26,9 +24,11 @@ class For_Piano:
         # set up class vars
         self.tick_count = 0
         self.end_time = duration + time.time()
+        self.fabonnacci_time_swap = (duration * 0.618) + time.time()
 
         # start a list that builds up the composition from end to mid-point
         self.build_from_end = []
+        self.new_or_reverse_notes = True
 
         # build blank bar
         self.build_blank_bar()
@@ -61,7 +61,7 @@ class For_Piano:
         # position BPM/ live pulse indicator on staff
         pulse_pen = Pen(color="#ff0000")
         brush = Brush()
-        self.bpm_pulse = MusicText((ZERO, self.treble_staff.unit(-2)), self.treble_staff, "metNoteQuarterUp", brush=brush, pen=pulse_pen)
+        self.bpm_pulse = MusicText((Mm(-10), self.treble_staff.unit(-2)), self.treble_staff, "metNoteQuarterUp", brush=brush, pen=pulse_pen)
         self.bpm = Text((Mm(10), ZERO), self.bpm_pulse, "= 60", scale=2)
 
     def build_new_events(self, chord, time_sig, duration, polyrhythm):
@@ -94,8 +94,6 @@ class For_Piano:
         print(f"quaver quaver_position_list_mm list = {self.quaver_position_list_mm}")
 
         # make quaver position list for iterating through quaver_position_list_mm (LH, RH)
-        # self.next_8th_position_treble = 0
-        # self.next_8th_position_bass = 0
         next_8th_position_list = [[0], [0]]
 
         # change blank bar to fit new time sig
@@ -104,13 +102,13 @@ class For_Piano:
         self.end_line.x = Mm(self.quaver_position_list_mm[-1] + end_offset)
         self.pedal.end_x = Mm(self.quaver_position_list_mm[-1] + end_offset)
 
-        #######################
-        # add first rest
-        #######################
+        #################################
+        # add first rest to both staffs
+        #################################
         for i, staff in enumerate(self.piano_staff_list):
             first_rest_position = next_8th_position_list[i][0]
             first_rest_object, first_rest_duration = self.add_first_rest(time_sig,
-                                                    self.piano_staff_list[i],
+                                                                         self.piano_staff_list[i],
                                                                          first_rest_position)
 
             # add objects to master events list
@@ -120,37 +118,22 @@ class For_Piano:
             next_8th_position_list[i][0] += first_rest_duration
             print(f"1 next_8th_position for {staff}= {next_8th_position_list[i]}")
 
-            # self.next_8th_position_treble += first_rest_duration
-            # self.next_8th_position_bass += first_rest_duration
-
-        # for _list in self.next_8th_list:
-        #     print(f"8th note list = {_list}")
-        # print(f"next_8th_position = {self.next_8th_position_treble} out of {self.next_8th_position_bass}")
-
-        #######################
-        # get note list
-        #######################
+        #################################
+        # get note list for both staffs
+        #################################
         # get new notes from harmony & sort into LH & RH & clean duplicates
-        raw_note_list = self.makes_new_notes(chord)
-        treble_note_list, bass_note_list = self.clean_note_list(raw_note_list)
+        if self.new_or_reverse_notes:
+            chord = self.makes_new_notes(chord)
+        treble_note_list, bass_note_list = self.clean_note_list(chord)
         print(f"notes lists = {treble_note_list, bass_note_list}")
         note_list_list = [treble_note_list, bass_note_list]
 
         # determine note event duration in quavers
-        # todo add polyrhytmic into this equation
         duration_of_note = int((8 / duration[1]) * duration[0])
 
-        # # calc polyrythm extras if applicable
-        # if polyrhythm:
-        #     poly_nums = (int(polyrhythm[0]), int(polyrhythm[-1]))
-        #     polyrhythm_extra = (8 / poly_nums[1]) * poly_nums[0]
-        #     note_event_length =
-        # print(f'note event length for {duration} = ', duration_of_note, "quavers")
-
-        #######################
-        # block or separate hands
-        #######################
-
+        #################################
+        # block or separate hands for both staffs
+        #################################
         # positions of next event
         if random() > 0.5:
             print("BLOCK CHORD")
@@ -174,7 +157,6 @@ class For_Piano:
                 rests_padding = self.padding_rests(padding_rest_start_position,
                                                    padding_rest_duration,
                                                    self.piano_staff_list[i])
-
 
                 for _rest in rests_padding:
                     neoscore_events_list.append(_rest)
@@ -212,8 +194,7 @@ class For_Piano:
                     next_8th_position_list[i][0] += end_padding_duration
                     print(f"4 next_8th_position for {i}= {next_8th_position_list[i]}")
 
-
-        # # or treat them as 2 separate events
+        # or treat them as 2 separate events
         else:
             print("SEPARATE HANDS")
 
@@ -239,7 +220,6 @@ class For_Piano:
                 rests_padding = self.padding_rests(padding_rest_start_position,
                                                    padding_rest_duration,
                                                    self.piano_staff_list[i])
-
 
                 for _rest in rests_padding:
                     neoscore_events_list.append(_rest)
@@ -275,7 +255,6 @@ class For_Piano:
                         neoscore_events_list.append(_rest)
                     next_8th_position_list[i][0] += end_padding_duration
                     print(f"4 next_8th_position for {i}= {next_8th_position_list[i]}")
-
 
         return neoscore_events_list
 
@@ -352,11 +331,6 @@ class For_Piano:
                                None,
                                (first_rest_duration, 8))
 
-        # for _list in self.next_8th_list:
-        #     _list += first_rest_duration
-
-        # self.next_8th_position_treble += first_rest_duration
-        # self.next_8th_position_bass += first_rest_duration
         return first_rest, first_rest_duration
 
     def padding_rests(self, padding_rest_start_position,
@@ -389,51 +363,14 @@ class For_Piano:
             padding_list.append(rest_pad)
             padding_rest_start_position += rest_duration
 
-            #
-            # padding_rest_duration -= rest_duration
-            # print(f"rest duration = {rest_duration},remaining dur = {padding_rest_duration}")
-
         print(f"Padding list = {padding_list}")
         return padding_list
-
-        #     print(f"padding remaining_total_bar_length {remaining_duration}")
-        #     if remaining_duration == 4:
-        #         rest_duration = remaining_duration
-        #         padding_list.append(rest_duration)
-        #         print("A")
-        #     elif remaining_duration == 2:
-        #         rest_duration = remaining_duration
-        #         padding_list.append(rest_duration)
-        #     elif remaining_duration == 1:
-        #         rest_duration = remaining_duration
-        #         padding_list.append(rest_duration)
-        #         print("B")
-        #     else:
-        #         rest_duration = remaining_duration % 4
-        #         padding_list.append(rest_duration)
-        #         print("C")
-        #     remaining_duration -= rest_duration
-        #     print(f"rest duration = {rest_duration},remaining dur = {remaining_duration}")
-        #
-        # print(f"Padding list = {padding_list}")
-        # return padding_list
-
-    # def first_rest(self, time_sig):
-    #     """if time signature is 5/8 then the first rest is a quaver.
-    #     else a crotchet"""
-    #     if time_sig[1] == 8 and time_sig[0] <= 5:
-    #         first_rest_duration = 1
-    #     else:
-    #         first_rest_duration = 2
-    #     print(f"first rest duration = {first_rest_duration}")
-    #     return first_rest_duration
 
     def makes_new_notes(self, chord) -> list:
         """Calculates all note events for current bar"""
         # calculate how many notes from chord
         note_list = []
         num_notes = randrange(1, len(chord))
-        # print(f"Len of chard = {len(chord)}, num of random notes = {num_notes}")
 
         # add chosen notes to note list
         for i in range(num_notes):
@@ -464,24 +401,16 @@ class For_Piano:
                 else:
                     note_list.append(added_note + ",,")
             print(f"added A, B or C additional note")
-
-        # # bubble sort for duplicate notes
-        # clean_note_list = self.check_for_duplicate_notes(note_list)
-        # print("CLEAN note list = ", clean_note_list)
         return note_list
-
-    # def check_for_duplicate_notes(self, note_list) -> list:
-    #     """Removes any dupl;icate notes from not list.
-    #         Returns cleaned list"""
-    #     clean_note_list = [i for n, i in enumerate(note_list) if i not in note_list[:n]]
-    #     print("note list = ", note_list, "clean list = ", clean_note_list)
-    #     return clean_note_list
 
     def get_event_data(self):
         """Randomly chooses notes, time sig, durations etc
         from harmony list.
             Returns choices"""
-        next_notes = choice(harmony.chord_list)
+        if self.new_or_reverse_notes:
+            next_notes = choice(harmony.chord_list)
+        else:
+            next_notes = self.build_from_end.pop()
         next_time_sig = choice(harmony.time_sigs)
         next_duration = choice(harmony.durations)
         if random() > 0.6:
@@ -507,16 +436,22 @@ class For_Piano:
 
     def terminate(self):
         neoscore.shutdown()
+        sys.exit()
 
-    def reverse_build_from_list(self, time_sig, duration, polyrhythm):
-        pass
+    def check_time(self, time):
+        print(time, self.fabonnacci_time_swap, self.end_time)
+        if time <= self.fabonnacci_time_swap:
+            self.new_or_reverse_notes = True
+        else:
+            self.new_or_reverse_notes = False
+
+        if time >= self.end_time:
+            self.terminate()
 
     def refresh_func(self, time):
         """Main loop, refreshing the UI"""
-        # while time.time() <= self.end_time:
-
-        # print(self.tick_count)
         self.pulse_metronome_mark()
+        self.check_time(time)
 
         self.tick_count += 1
 
@@ -526,16 +461,11 @@ class For_Piano:
             chord, time_sig, duration, polyrhythm = self.get_event_data()
             bar_length = (8 / time_sig[1]) * time_sig[0]
             print("bar length = ", time_sig, bar_length)
-            # if time <= self.end_time / 2:
             self.active_note_list = self.build_new_events(chord, time_sig, duration, polyrhythm)
-            # else:
-            #     self.active_note_list = self.reverse_build_from_list(time_sig, duration, polyrhythm)
-
-        # self.terminate()
 
 
 if __name__ == "__main__":
-    for_piano = For_Piano(duration=360)
+    for_piano = For_Piano(duration=60)
 
     # set the refresh function to the score main loop
     # change fps to allow pulse to fade
