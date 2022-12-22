@@ -24,7 +24,7 @@ class For_Piano:
         # set up class vars
         self.tick_count = 0
         self.end_time = duration + time.time()
-        self.fabonnacci_time_swap = (duration * 0.618) + time.time()
+        self.fibonnacci_time_swap = (duration * 0.618) + time.time()
 
         # start a list that builds up the composition from end to mid-point
         self.build_from_end = []
@@ -65,7 +65,11 @@ class For_Piano:
         self.bpm = Text((Mm(10), ZERO), self.bpm_pulse, "= 60", scale=2)
 
         # section indicator text
-        self.section = Text((Mm(0), self.treble_staff.unit(-4)), self.bpm_pulse, "A", scale=4)
+        self.section = Text((Mm(-20), self.treble_staff.unit(-4)), self.bpm_pulse, "A", scale=4)
+
+        # inspiration text
+        inspiration_quote = "It comes from nothing; it goes into nothing"
+        self.inspiration = Text((Mm(0), self.treble_staff.unit(4)), self.pedal, inspiration_quote, scale=2)
 
 
     def build_new_events(self, chord, time_sig, duration, polyrhythm):
@@ -385,7 +389,7 @@ class For_Piano:
         end_list = []
         if num_notes < len(chord):
             for ie in range(len(chord) - num_notes):
-                end_list.append(chord[ie][0])
+                end_list.append(chord[ie])
             self.build_from_end.append(end_list)
 
         # 3 in 5 chance last note in chord as a, b, c variation
@@ -443,8 +447,8 @@ class For_Piano:
         sys.exit()
 
     def check_time(self, time):
-        print(time, self.fabonnacci_time_swap, self.end_time)
-        if time <= self.fabonnacci_time_swap:
+        # print(time, self.fibonnacci_time_swap, self.end_time)
+        if time <= self.fibonnacci_time_swap:
             self.new_or_reverse_notes = True
         else:
             self.new_or_reverse_notes = False
