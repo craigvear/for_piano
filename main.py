@@ -12,8 +12,8 @@ gray_list = ["#000000",
 class For_Piano:
     def __init__(self, duration):
         # initiate neoscore with bespoke paper
-        new_paper = Paper(Mm(400), Mm(300), Mm(1), Mm(1), Mm(1), Mm(1))
-        neoscore.setup(new_paper)
+        # new_paper = Paper(Mm(400), Mm(300), Mm(1), Mm(1), Mm(1), Mm(1))
+        neoscore.setup()
 
         # set up harmony lists
         self.chord_list = harmony.chord_list
@@ -63,6 +63,10 @@ class For_Piano:
         brush = Brush()
         self.bpm_pulse = MusicText((Mm(-10), self.treble_staff.unit(-2)), self.treble_staff, "metNoteQuarterUp", brush=brush, pen=pulse_pen)
         self.bpm = Text((Mm(10), ZERO), self.bpm_pulse, "= 60", scale=2)
+
+        # section indicator text
+        self.section = Text((Mm(0), self.treble_staff.unit(-4)), self.bpm_pulse, "A", scale=4)
+
 
     def build_new_events(self, chord, time_sig, duration, polyrhythm):
         """organises event generation and collects an event list.
@@ -444,6 +448,7 @@ class For_Piano:
             self.new_or_reverse_notes = True
         else:
             self.new_or_reverse_notes = False
+            self.section.text = "B"
 
         if time >= self.end_time:
             self.terminate()
@@ -469,7 +474,11 @@ if __name__ == "__main__":
 
     # set the refresh function to the score main loop
     # change fps to allow pulse to fade
-    neoscore.set_refresh_func(refresh_func=for_piano.refresh_func, target_fps=4)
+    neoscore.set_refresh_func(refresh_func=for_piano.refresh_func,
+                              target_fps=4)
 
-    neoscore.show(display_page_geometry=False)
-
+    neoscore.show(auto_viewport_interaction_enabled=False,
+                  display_page_geometry=False,
+                  min_window_size=(500, 500),
+                  max_window_size=(1000, 1000),
+                  )
